@@ -42,3 +42,7 @@ scoop update context
 
 will detect a newer build (via `tex/status.tma`) and re-run the installer to
 pull the latest tree.
+
+### Automated Updates
+
+The manifest in this bucket is automatically kept up-to-date. A GitHub Actions workflow runs every 12 hours to check for upstream updates, run integration tests on Windows, and commit version changes back to this repository.
