@@ -12,6 +12,42 @@ patch targets that bundled bin/mtxrun.lua copy, applied with
 `git apply -p1` from the app's install directory before the first
 `mtx-install.lua --update` bootstrap run.
 
+How this was found
+-------------------
+The jirib/scoop-bucket "context" package's own Windows CI (GitHub
+Actions, windows-latest) failed a fresh `scoop install context` with
+mtxrun unable to find tex/texmf-context/web2c/contextcnf.lua, and
+every mtxrun/context script lookup afterwards failing with "unknown
+script ...". A diagnostic step added to that CI listed the tree after
+bootstrap: tex/texmf-context had only ~10 entries, and every one of
+them - including "web2c" - was a 0-byte *file* rather than a
+directory (`Get-ChildItem` showed `-a----` file-mode entries where
+directories were expected).
+
+To rule out a scoop-specific packaging mistake, the exact same
+`mtx-install.lua --update` bootstrap was reproduced by hand, fresh,
+directly against the real upstream context-linux-64.zip /
+context-win64.zip / texmf-context.zip - on Linux it succeeded on the
+first try (5723 real files under tex/texmf-context, web2c a real
+directory); the identical code, same zip, same directory-marker
+entries, failed only on Windows. Tracing unzipdir()/unzipfile() in the
+bundled bin/mtxrun.lua explained the split: unzipfile() returns "" for
+a directory-marker entry (0 compressed bytes), which Lua treats as
+truthy, so unzipdir() proceeds to mkdirs()+savedata() for it. Writing
+a file to a path ending in "/" apparently fails silently on POSIX
+(harmless no-op there) but succeeds on Windows as a literal 0-byte
+file with that name - which then blocks mkdir() for every real file
+meant to live underneath it.
+
+This patch was applied to bin/mtxrun.lua and verified against a real,
+fresh `scoop install context` on a GitHub Actions windows-latest
+runner (jirib/scoop-bucket CI): the bootstrap now completes in ~2
+minutes (previously it either corrupted the tree, or - with a
+detect-and-retry workaround instead of this patch - took ~48 minutes
+falling back to downloading ~6700 files individually), tex/texmf-context
+contains the correct 5723 files with web2c as a real directory, and
+`context --version` / `mtxrun --generate` both work.
+
 Reported upstream to ntg-context@ntg.nl.
 
 --- a/bin/mtxrun.lua
