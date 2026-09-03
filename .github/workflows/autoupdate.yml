@@ -1,0 +1,93 @@
+name: Autoupdate Manifest
+
+on:
+  schedule:
+    # Run twice a day (every 12 hours) to check for updates
+    - cron: '0 */12 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  autoupdate:
+    name: Check & Apply Autoupdates
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Scoop
+        shell: powershell
+        run: |
+          Set-ExecutionPolicy RemoteSigned -Scope Process -Force
+          $env:SCOOP = "$env:USERPROFILE\scoop"
+          [Environment]::SetEnvironmentVariable('SCOOP', $env:SCOOP, 'User')
+          Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression
+
+      - name: Run Scoop Checkver and Autoupdate
+        shell: powershell
+        run: |
+          $env:PATH = "$env:USERPROFILE\scoop\shims;$env:PATH"
+          # Run Scoop's checkver script on context to update the manifest locally
+          & "$env:USERPROFILE\scoop\apps\scoop\current\bin\checkver.ps1" context -u
+          
+      - name: Check for Changes
+        id: check_changes
+        shell: powershell
+        run: |
+          $gitStatus = git status --porcelain
+          if ($gitStatus -match "bucket/context.json") {
+              Write-Host "New version detected and manifest updated."
+              git diff bucket/context.json
+              echo "changed=true" >> $env:GITHUB_OUTPUT
+              
+              # Extract the new version from the manifest
+              $manifest = Get-Content bucket/context.json | ConvertFrom-Json
+              $newVersion = $manifest.version
+              echo "version=$newVersion" >> $env:GITHUB_OUTPUT
+          } else {
+              Write-Host "No updates found. Up to date."
+              echo "changed=false" >> $env:GITHUB_OUTPUT
+          }
+
+      - name: Add Local Bucket and Run Integration Tests
+        if: steps.check_changes.outputs.changed == 'true'
+        shell: powershell
+        run: |
+          $env:PATH = "$env:USERPROFILE\scoop\shims;$env:PATH"
+          
+          # Force remove any existing installation to start fresh
+          scoop uninstall context | Out-Null
+          
+          # Add current repository directory as local bucket
+          scoop bucket add local-bucket "$env:GITHUB_WORKSPACE"
+          
+          # Install context from the local bucket
+          Write-Host "Installing context..."
+          scoop install local-bucket/context
+          
+          # Verify installation bin path and environment shims
+          Write-Host "Verifying mtxrun version..."
+          mtxrun --version
+          if ($LastExitCode -ne 0) { throw "mtxrun --version failed with exit code $LastExitCode" }
+          
+          Write-Host "Verifying context version..."
+          context --version
+          if ($LastExitCode -ne 0) { throw "context --version failed with exit code $LastExitCode" }
+
+      - name: Commit and Push Autoupdate
+        if: steps.check_changes.outputs.changed == 'true'
+        shell: powershell
+        run: |
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          
+          $newVersion = "${{ steps.check_changes.outputs.version }}"
+          git add bucket/context.json
+          git commit -m "context: update to version $newVersion"
+          
+          # Push changes back to the repository
+          git push

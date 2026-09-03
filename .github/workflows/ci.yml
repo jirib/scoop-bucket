@@ -1,0 +1,123 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  schedule:
+    # Run weekly on Sunday to detect upstream breaking changes
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
+
+jobs:
+  lint:
+    name: Lint Manifest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install Linting Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install jsonschema requests
+
+      - name: Validate Scoop Manifest JSON
+        run: |
+          python -c '
+          import json
+          import glob
+          import urllib.request
+          from jsonschema import validate, ValidationError
+
+          schema_url = "https://raw.githubusercontent.com/ScoopInstaller/Scoop/master/schema.json"
+          try:
+              with urllib.request.urlopen(schema_url) as response:
+                  schema = json.loads(response.read().decode())
+          except Exception as e:
+              print(f"Failed to fetch Scoop schema: {e}")
+              exit(1)
+
+          manifests = glob.glob("bucket/*.json")
+          if not manifests:
+              print("No manifests found in bucket/")
+              exit(1)
+
+          failed = False
+          for manifest_path in manifests:
+              print(f"Validating {manifest_path}...")
+              try:
+                  with open(manifest_path, "r", encoding="utf-8") as f:
+                      manifest = json.load(f)
+                  validate(instance=manifest, schema=schema)
+                  print(f"  {manifest_path} is valid.")
+              except json.JSONDecodeError as e:
+                  print(f"  Error parsing JSON: {e}")
+                  failed = True
+              except ValidationError as e:
+                  print(f"  Schema validation error in {manifest_path}: {e.message}")
+                  failed = True
+              except Exception as e:
+                  print(f"  Unexpected error in {manifest_path}: {e}")
+                  failed = True
+
+          if failed:
+              exit(1)
+          '
+
+  test:
+    name: Integration Test (Windows)
+    runs-on: windows-latest
+    needs: lint
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Scoop
+        shell: powershell
+        run: |
+          Set-ExecutionPolicy RemoteSigned -Scope Process -Force
+          $env:SCOOP = "$env:USERPROFILE\scoop"
+          [Environment]::SetEnvironmentVariable('SCOOP', $env:SCOOP, 'User')
+          # Install Scoop using standard installer
+          Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression
+
+      - name: Verify Scoop Installation
+        shell: powershell
+        run: |
+          $env:PATH = "$env:USERPROFILE\scoop\shims;$env:PATH"
+          scoop --version
+
+      - name: Add Local Bucket and Install ConTeXt
+        shell: powershell
+        run: |
+          $env:PATH = "$env:USERPROFILE\scoop\shims;$env:PATH"
+          # Add current repository directory as local bucket
+          scoop bucket add local-bucket "$env:GITHUB_WORKSPACE"
+          # Install context from the local bucket
+          scoop install local-bucket/context
+
+      - name: Verify ConTeXt Installation
+        shell: powershell
+        run: |
+          $env:PATH = "$env:USERPROFILE\scoop\shims;$env:PATH"
+          
+          Write-Host "Checking mtxrun version..."
+          mtxrun --version
+          if ($LastExitCode -ne 0) { throw "mtxrun --version failed with exit code $LastExitCode" }
+          
+          Write-Host "Checking context version..."
+          context --version
+          if ($LastExitCode -ne 0) { throw "context --version failed with exit code $LastExitCode" }
+
+      - name: Verify Scoop Checkver
+        shell: powershell
+        run: |
+          $env:PATH = "$env:USERPROFILE\scoop\shims;$env:PATH"
+          scoop checkver context

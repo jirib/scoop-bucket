@@ -1,0 +1,46 @@
+{
+    "version": "2026.08.23",
+    "description": "ConTeXt LMTX typesetting system based on LuaMetaTeX",
+    "homepage": "https://www.contextgarden.net/",
+    "license": "GPL-2.0-only",
+    "notes": [
+        "ConTeXt LMTX is a rolling release: the first install downloads the full",
+        "ConTeXt tree (a few hundred MB) and generates formats, so it can take a while.",
+        "Run 'scoop update context' to pick up newer builds when the upstream date changes."
+    ],
+    "architecture": {
+        "64bit": {
+            "url": "https://lmtx.pragma-ade.com/install-lmtx/context-win64.zip",
+            "hash": "sha256:efbd08587cde56014c469eb7be93a3332ac4fdc5f18523a0be542def74473dbc"
+        }
+    },
+    "bin": [
+        ["tex\\texmf-win64\\bin\\mtxrun.exe", "mtxrun"],
+        ["tex\\texmf-win64\\bin\\context.exe", "context"]
+    ],
+    "env_add_path": "tex\\texmf-win64\\bin",
+    "persist": [
+        "tex"
+    ],
+    "post_install": [
+        "Push-Location $dir",
+        "$server = 'lmtx.pragma-ade.com,lmtx.pragma-ade.nl,lmtx.contextgarden.net'",
+        "& \"$dir\\bin\\mtxrun.exe\" --script \"$dir\\bin\\mtx-install.lua\" --update --server=$server --instance=install-lmtx --platform=win64",
+        "Pop-Location",
+        "if (-not (Test-Path (Join-Path $dir 'tex\\texmf-win64\\bin\\context.exe'))) {",
+        "    throw 'ConTeXt LMTX bootstrap failed: tex\\texmf-win64\\bin\\context.exe was not created'",
+        "}"
+    ],
+    "checkver": {
+        "url": "https://lmtx.pragma-ade.com/install-lmtx/tex/status.tma",
+        "regex": "\\[\"date\"\\]\\s*=\\s*\"(\\d{4})-(\\d{2})-(\\d{2})\"",
+        "replace": "$1.$2.$3"
+    },
+    "autoupdate": {
+        "architecture": {
+            "64bit": {
+                "url": "https://lmtx.pragma-ade.com/install-lmtx/context-win64.zip"
+            }
+        }
+    }
+}
