@@ -1,0 +1,28 @@
+Fix util-zip.lua's unzipdir() writing zip directory-marker entries as
+0-byte files, which then blocks mkdir() for the real files that belong
+underneath them (reproducible on Windows; the same code path happens
+to no-op harmlessly on POSIX, where opening a path ending in "/" for
+writing simply fails).
+
+Upstream: ConTeXt LMTX, tex/context/base/mkiv/util-zip.lua, function
+unzipdir - bundled (minified, concatenated with other core modules)
+into bin/mtxrun.lua inside the small bootstrap archive
+(context-<platform>.zip) that ships from lmtx.pragma-ade.com. This
+patch targets that bundled bin/mtxrun.lua copy, applied with
+`git apply -p1` from the app's install directory before the first
+`mtx-install.lua --update` bootstrap run.
+
+Reported upstream to ntg-context@ntg.nl.
+
+--- a/bin/mtxrun.lua
++++ b/bin/mtxrun.lua
+@@ -16453,7 +16453,8 @@
+     for i=1,count do
+      local l=list[i]
+      local n=l.filename
+-     if not validate or validate(n) then
++     if n:sub(-1) == "/" then
++     elseif not validate or validate(n) then
+       local d=unzipfile(z,n) 
+       if d then
+        local p=filejoin(path,n)
