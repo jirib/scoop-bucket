@@ -100,7 +100,8 @@ jobs:
           git config --global --add safe.directory '*'
           $env:PATH = "$env:USERPROFILE\scoop\shims;$env:PATH"
           # Add current repository directory as local bucket
-          scoop bucket add local-bucket "$env:GITHUB_WORKSPACE"
+          $bucket_path = ([System.Uri] "$env:GITHUB_WORKSPACE").AbsoluteUri
+          scoop bucket add local-bucket $bucket_path
           # Install context from the local bucket
           scoop install local-bucket/context
 

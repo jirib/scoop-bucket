@@ -64,7 +64,8 @@ jobs:
           scoop uninstall context | Out-Null
           
           # Add current repository directory as local bucket
-          scoop bucket add local-bucket "$env:GITHUB_WORKSPACE"
+          $bucket_path = ([System.Uri] "$env:GITHUB_WORKSPACE").AbsoluteUri
+          scoop bucket add local-bucket $bucket_path
           
           # Install context from the local bucket
           Write-Host "Installing context..."
