@@ -14,6 +14,12 @@
             "hash": "sha256:efbd08587cde56014c469eb7be93a3332ac4fdc5f18523a0be542def74473dbc"
         }
     },
+    "pre_install": [
+        "$bin_dir = Join-Path $dir 'tex\\texmf-win64\\bin'",
+        "if (-not (Test-Path $bin_dir)) { New-Item $bin_dir -ItemType Directory -Force | Out-Null }",
+        "if (-not (Test-Path (Join-Path $bin_dir 'mtxrun.exe'))) { New-Item (Join-Path $bin_dir 'mtxrun.exe') -ItemType File -Force | Out-Null }",
+        "if (-not (Test-Path (Join-Path $bin_dir 'context.exe'))) { New-Item (Join-Path $bin_dir 'context.exe') -ItemType File -Force | Out-Null }"
+    ],
     "bin": [
         ["tex\\texmf-win64\\bin\\mtxrun.exe", "mtxrun"],
         ["tex\\texmf-win64\\bin\\context.exe", "context"]
