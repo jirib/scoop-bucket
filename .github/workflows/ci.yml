@@ -111,15 +111,24 @@ jobs:
           $env:PATH = "$env:USERPROFILE\scoop\shims;$env:PATH"
           
           Write-Host "Checking mtxrun version..."
-          mtxrun --version
-          if ($LastExitCode -ne 0) { throw "mtxrun --version failed with exit code $LastExitCode" }
-          
+          $mtxrunOutput = mtxrun --version 2>&1 | Out-String
+          Write-Host $mtxrunOutput
+          if ($LastExitCode -ne 0 -or $mtxrunOutput -match 'unknown script') {
+              throw "mtxrun --version failed with exit code $LastExitCode"
+          }
+
           Write-Host "Checking context version..."
-          context --version
-          if ($LastExitCode -ne 0) { throw "context --version failed with exit code $LastExitCode" }
+          $contextOutput = context --version 2>&1 | Out-String
+          Write-Host $contextOutput
+          # mtxrun/context can exit 0 even when the script/tree lookup fails, so
+          # don't rely on the exit code alone - the output itself must not report
+          # a resolver failure.
+          if ($LastExitCode -ne 0 -or $contextOutput -match 'unknown script' -or $contextOutput -match 'resolver databases are not present') {
+              throw "context --version failed with exit code $LastExitCode. Output:`n$contextOutput"
+          }
 
       - name: Verify Scoop Checkver
         shell: powershell
         run: |
           $env:PATH = "$env:USERPROFILE\scoop\shims;$env:PATH"
-          & "$env:USERPROFILE\scoop\apps\scoop\current\bin\checkver.ps1" context
+          & "$env:USERPROFILE\scoop\apps\scoop\current\bin\checkver.ps1" -App "$env:GITHUB_WORKSPACE\bucket\context.json"
