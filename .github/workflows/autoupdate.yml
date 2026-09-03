@@ -57,6 +57,7 @@ jobs:
         if: steps.check_changes.outputs.changed == 'true'
         shell: powershell
         run: |
+          git config --global --add safe.directory '*'
           $env:PATH = "$env:USERPROFILE\scoop\shims;$env:PATH"
           
           # Force remove any existing installation to start fresh

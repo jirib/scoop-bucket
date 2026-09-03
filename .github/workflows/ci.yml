@@ -97,6 +97,7 @@ jobs:
       - name: Add Local Bucket and Install ConTeXt
         shell: powershell
         run: |
+          git config --global --add safe.directory '*'
           $env:PATH = "$env:USERPROFILE\scoop\shims;$env:PATH"
           # Add current repository directory as local bucket
           scoop bucket add local-bucket "$env:GITHUB_WORKSPACE"
