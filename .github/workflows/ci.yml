@@ -106,6 +106,7 @@ jobs:
           scoop install local-bucket/context
 
       - name: Diagnose ConTeXt Tree
+        if: always()
         shell: powershell
         run: |
           $appDir = "$env:USERPROFILE\scoop\apps\context\current"
