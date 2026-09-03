@@ -31,10 +31,15 @@
     "post_install": [
         "Push-Location $dir",
         "$server = 'lmtx.pragma-ade.com,lmtx.pragma-ade.nl,lmtx.contextgarden.net'",
-        "& \"$dir\\bin\\mtxrun.exe\" --script \"$dir\\bin\\mtx-install.lua\" --update --server=$server --instance=install-lmtx --platform=win64",
+        "& \"$dir\\bin\\mtxrun.exe\" --script \"$dir\\bin\\mtx-install.lua\" --update --server=$server --instance=install-lmtx --extras=\"\" --platform=win64",
+        "$bootstrap_exit = $LASTEXITCODE",
         "Pop-Location",
-        "if (-not (Test-Path (Join-Path $dir 'tex\\texmf-win64\\bin\\context.exe'))) {",
-        "    throw 'ConTeXt LMTX bootstrap failed: tex\\texmf-win64\\bin\\context.exe was not created'",
+        "$context_exe = Join-Path $dir 'tex\\texmf-win64\\bin\\context.exe'",
+        "$mtxrun_exe = Join-Path $dir 'tex\\texmf-win64\\bin\\mtxrun.exe'",
+        "$context_ok = (Test-Path $context_exe) -and (Get-Item $context_exe).Length -gt 0",
+        "$mtxrun_ok = (Test-Path $mtxrun_exe) -and (Get-Item $mtxrun_exe).Length -gt 0",
+        "if ($bootstrap_exit -ne 0 -or -not $context_ok -or -not $mtxrun_ok) {",
+        "    throw \"ConTeXt LMTX bootstrap failed (exit code $bootstrap_exit): context.exe/mtxrun.exe missing or empty. Try 'scoop uninstall context' then 'scoop install context' again.\"",
         "}"
     ],
     "checkver": {
