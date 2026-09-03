@@ -122,4 +122,4 @@ jobs:
         shell: powershell
         run: |
           $env:PATH = "$env:USERPROFILE\scoop\shims;$env:PATH"
-          scoop checkver context
+          & "$env:USERPROFILE\scoop\apps\scoop\current\bin\checkver.ps1" context
