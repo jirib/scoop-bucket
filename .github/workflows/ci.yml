@@ -105,6 +105,50 @@ jobs:
           # Install context from the local bucket
           scoop install local-bucket/context
 
+      - name: Diagnose ConTeXt Tree
+        shell: powershell
+        run: |
+          $appDir = "$env:USERPROFILE\scoop\apps\context\current"
+
+          Write-Host "=== app dir item info (checking for reparse point/symlink from 'persist') ==="
+          Get-Item $appDir | Format-List *
+          $texPath = Join-Path $appDir 'tex'
+          Get-Item $texPath | Format-List *
+
+          Write-Host "=== top-level tex\ listing ==="
+          Get-ChildItem $texPath | Format-Table Name, Mode, LastWriteTime
+
+          Write-Host "=== tex\texmf-context top-level listing ==="
+          $ctxTree = Join-Path $texPath 'texmf-context'
+          if (Test-Path $ctxTree) {
+              Get-ChildItem $ctxTree | Format-Table Name, Mode
+              $count = (Get-ChildItem $ctxTree -Recurse -File -ErrorAction SilentlyContinue | Measure-Object).Count
+              Write-Host "tex\texmf-context contains $count files (recursive)"
+          } else {
+              Write-Host "tex\texmf-context does NOT exist"
+          }
+
+          Write-Host "=== tex\texmf-context\web2c listing ==="
+          $web2c = Join-Path $ctxTree 'web2c'
+          if (Test-Path $web2c) {
+              Get-ChildItem $web2c | Format-Table Name, Length
+          } else {
+              Write-Host "tex\texmf-context\web2c does NOT exist"
+          }
+
+          Write-Host "=== tex\texmf top-level listing ==="
+          $texmfTree = Join-Path $texPath 'texmf'
+          if (Test-Path $texmfTree) {
+              $count = (Get-ChildItem $texmfTree -Recurse -File -ErrorAction SilentlyContinue | Measure-Object).Count
+              Write-Host "tex\texmf contains $count files (recursive)"
+          } else {
+              Write-Host "tex\texmf does NOT exist"
+          }
+
+          Write-Host "=== searching entire tex tree for texmfcnf.lua / contextcnf.lua ==="
+          Get-ChildItem $texPath -Recurse -Filter 'texmfcnf.lua' -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "found: $($_.FullName)" }
+          Get-ChildItem $texPath -Recurse -Filter 'contextcnf.lua' -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "found: $($_.FullName)" }
+
       - name: Verify ConTeXt Installation
         shell: powershell
         run: |
