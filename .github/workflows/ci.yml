@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  schedule:
+    # Run weekly on Sunday to detect upstream breaking changes
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
+
+jobs:
+  lint:
+    name: Lint Manifests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.x'
+
+      - name: Install Linting Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install jsonschema
+
+      - name: Validate Scoop Manifests
+        run: python .github/scripts/validate_manifests.py
+
+  # One job per package. Adding a package means adding a job like this one plus a
+  # .github/actions/test-<app> action; 'uses:' cannot be interpolated, so these
+  # cannot be collapsed into a matrix over the app name.
+  test-context:
+    name: Integration Test - context (Windows)
+    runs-on: windows-latest
+    needs: lint
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v5
+
+      - name: Setup Scoop
+        uses: ./.github/actions/setup-scoop
+
+      - name: Install and Verify context
+        uses: ./.github/actions/test-context

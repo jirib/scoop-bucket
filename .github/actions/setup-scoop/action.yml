@@ -1,0 +1,35 @@
+name: Setup Scoop
+description: Install the Scoop CLI, put its shims on PATH and export SCOOP for later steps.
+
+outputs:
+  scoop-root:
+    description: Root of the Scoop installation (same value as the exported SCOOP variable).
+    value: ${{ steps.install.outputs.scoop-root }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install Scoop
+      id: install
+      shell: powershell
+      run: |
+        Set-ExecutionPolicy RemoteSigned -Scope Process -Force
+        $scoopRoot = "$env:USERPROFILE\scoop"
+        $env:SCOOP = $scoopRoot
+        [Environment]::SetEnvironmentVariable('SCOOP', $scoopRoot, 'User')
+        Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression
+
+        # Hand the installation to the rest of the job: GITHUB_PATH so every later
+        # step can call 'scoop' and the app shims without prepending PATH itself,
+        # GITHUB_ENV so they can reach into the Scoop root (e.g. for checkver.ps1).
+        # A User-scope variable set above is NOT enough - later steps inherit the
+        # runner process environment, which was captured before this step ran.
+        echo "$scoopRoot\shims" >> $env:GITHUB_PATH
+        echo "SCOOP=$scoopRoot" >> $env:GITHUB_ENV
+        echo "scoop-root=$scoopRoot" >> $env:GITHUB_OUTPUT
+
+        # 'scoop bucket add <file-uri>' git-clones the workspace, which git
+        # otherwise refuses as a dubious-ownership directory on the runner.
+        git config --global --add safe.directory '*'
+
+        scoop --version

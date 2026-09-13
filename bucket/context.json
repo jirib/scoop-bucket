@@ -1,0 +1,73 @@
+{
+    "version": "2026.09.10",
+    "description": "ConTeXt LMTX typesetting system based on LuaMetaTeX",
+    "homepage": "https://www.contextgarden.net/",
+    "license": "GPL-2.0-only",
+    "notes": [
+        "ConTeXt LMTX is a rolling release: the first install downloads the full",
+        "ConTeXt tree (a few hundred MB) and generates formats, so it can take a while.",
+        "Run 'scoop update context' to pick up newer builds when the upstream date changes."
+    ],
+    "architecture": {
+        "64bit": {
+            "url": "https://lmtx.pragma-ade.com/install-lmtx/context-win64.zip",
+            "hash": "sha256:9248c47a959360a9985292780e967c1192b1a5e25918c867fa9d10199fe280fd"
+        }
+    },
+    "pre_install": [
+        "$bin_dir = Join-Path $dir 'tex\\texmf-win64\\bin'",
+        "if (-not (Test-Path $bin_dir)) { New-Item $bin_dir -ItemType Directory -Force | Out-Null }",
+        "if (-not (Test-Path (Join-Path $bin_dir 'mtxrun.exe'))) { New-Item (Join-Path $bin_dir 'mtxrun.exe') -ItemType File -Force | Out-Null }",
+        "if (-not (Test-Path (Join-Path $bin_dir 'context.exe'))) { New-Item (Join-Path $bin_dir 'context.exe') -ItemType File -Force | Out-Null }"
+    ],
+    "bin": [
+        ["tex\\texmf-win64\\bin\\mtxrun.exe", "mtxrun"],
+        ["tex\\texmf-win64\\bin\\context.exe", "context"]
+    ],
+    "env_add_path": "tex\\texmf-win64\\bin",
+    "persist": [
+        "tex"
+    ],
+    "post_install": [
+        "Push-Location $dir",
+        "$server = 'lmtx.pragma-ade.com,lmtx.pragma-ade.nl,lmtx.contextgarden.net'",
+        "$contextcnf = Join-Path $dir 'tex\\texmf-context\\web2c\\contextcnf.lua'",
+        "$texRoot = Join-Path $dir 'tex'",
+        "# tex is persisted across re-installs, so clear any tree left incomplete by a",
+        "# previous failed bootstrap (mtx-install.lua saves .tma manifests even when it",
+        "# wrote nothing, which would otherwise skip re-downloading the missing tree).",
+        "if (-not (Test-Path $contextcnf)) {",
+        "    foreach ($name in @('texmf', 'texmf-context', 'texmf.tma', 'texmf-context.tma')) {",
+        "        $p = Join-Path $texRoot $name",
+        "        if (Test-Path $p) { Remove-Item $p -Recurse -Force -ErrorAction SilentlyContinue }",
+        "    }",
+        "    foreach ($exeName in @('mtxrun.exe', 'context.exe')) {",
+        "        $p = Join-Path $texRoot \"texmf-win64\\bin\\$exeName\"",
+        "        if ((Test-Path $p) -and (Get-Item $p).Length -eq 0) { Remove-Item $p -Force -ErrorAction SilentlyContinue }",
+        "    }",
+        "}",
+        "& \"$dir\\bin\\mtxrun.exe\" --script \"$dir\\bin\\mtx-install.lua\" --update --server=$server --instance=install-lmtx --extras=\"\" --platform=win64",
+        "$bootstrap_exit = $LASTEXITCODE",
+        "Pop-Location",
+        "$context_exe = Join-Path $dir 'tex\\texmf-win64\\bin\\context.exe'",
+        "$mtxrun_exe = Join-Path $dir 'tex\\texmf-win64\\bin\\mtxrun.exe'",
+        "$context_ok = (Test-Path $context_exe) -and (((Get-Item $context_exe).Length -gt 0) -or ((Get-Item $context_exe).LinkType -eq 'SymbolicLink'))",
+        "$mtxrun_ok = (Test-Path $mtxrun_exe) -and (((Get-Item $mtxrun_exe).Length -gt 0) -or ((Get-Item $mtxrun_exe).LinkType -eq 'SymbolicLink'))",
+        "$contextcnf_ok = Test-Path $contextcnf",
+        "if ($bootstrap_exit -ne 0 -or -not $context_ok -or -not $mtxrun_ok -or -not $contextcnf_ok) {",
+        "    throw \"ConTeXt LMTX bootstrap failed (exit code $bootstrap_exit): context.exe/mtxrun.exe missing/empty, or tex\\texmf-context tree not installed (contextcnf.lua missing). Try 'scoop uninstall context' then 'scoop install context' again.\"",
+        "}"
+    ],
+    "checkver": {
+        "url": "https://lmtx.pragma-ade.com/install-lmtx/tex/status.tma",
+        "regex": "\\[\"date\"\\]\\s*=\\s*\"(\\d{4})-(\\d{2})-(\\d{2})\"",
+        "replace": "$1.$2.$3"
+    },
+    "autoupdate": {
+        "architecture": {
+            "64bit": {
+                "url": "https://lmtx.pragma-ade.com/install-lmtx/context-win64.zip"
+            }
+        }
+    }
+}

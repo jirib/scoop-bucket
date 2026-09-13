@@ -1,0 +1,56 @@
+name: Test context manifest
+description: Register the checked-out bucket with Scoop, install context from it and verify its shims work.
+
+inputs:
+  bucket-path:
+    description: Path to the bucket repository checkout to install from.
+    default: ${{ github.workspace }}
+  bucket-name:
+    description: Name to register the checkout under in Scoop.
+    default: local-bucket
+
+runs:
+  using: composite
+  steps:
+    - name: Register local bucket
+      shell: powershell
+      run: |
+        # Scoop git-CLONES this path, so it only ever sees COMMITTED history -
+        # a caller that modified a manifest must commit it before this runs.
+        $bucketPath = ([System.Uri] "${{ inputs.bucket-path }}").AbsoluteUri
+        # Scoop keeps buckets as directories under <root>\buckets, so this is the
+        # registry - checking it keeps the step re-runnable on a warm runner.
+        $root = if ($env:SCOOP) { $env:SCOOP } else { "$env:USERPROFILE\scoop" }
+        if (Test-Path (Join-Path $root 'buckets\${{ inputs.bucket-name }}')) {
+            scoop bucket rm '${{ inputs.bucket-name }}'
+        }
+        scoop bucket add '${{ inputs.bucket-name }}' $bucketPath
+        if ($LastExitCode -ne 0) { throw "scoop bucket add failed with exit code $LastExitCode" }
+
+    - name: Install context
+      shell: powershell
+      run: |
+        # This also re-verifies the manifest hash: Scoop downloads the archive and
+        # aborts on a mismatch, so a stale 'hash' can never reach a green run.
+        scoop install '${{ inputs.bucket-name }}/context'
+        if ($LastExitCode -ne 0) { throw "scoop install failed with exit code $LastExitCode" }
+
+    - name: Verify context shims
+      shell: powershell
+      run: |
+        # mtxrun/context exit 0 even when the script or resolver-database lookup
+        # fails, so the OUTPUT has to be inspected too - an exit-code-only check
+        # passes on a completely broken tree.
+        Write-Host "Checking mtxrun version..."
+        $mtxrunOutput = mtxrun --version 2>&1 | Out-String
+        Write-Host $mtxrunOutput
+        if ($LastExitCode -ne 0 -or $mtxrunOutput -match 'unknown script') {
+            throw "mtxrun --version failed with exit code $LastExitCode. Output:`n$mtxrunOutput"
+        }
+
+        Write-Host "Checking context version..."
+        $contextOutput = context --version 2>&1 | Out-String
+        Write-Host $contextOutput
+        if ($LastExitCode -ne 0 -or $contextOutput -match 'unknown script' -or $contextOutput -match 'resolver databases are not present') {
+            throw "context --version failed with exit code $LastExitCode. Output:`n$contextOutput"
+        }

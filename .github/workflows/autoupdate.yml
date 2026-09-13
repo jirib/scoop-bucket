@@ -1,0 +1,63 @@
+name: Autoupdate Manifest
+
+on:
+  schedule:
+    # Run twice a day (every 12 hours) to check for updates
+    - cron: '0 */12 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# Two autoupdate runs pushing to main at the same time would race.
+concurrency:
+  group: autoupdate
+  cancel-in-progress: false
+
+jobs:
+  # One job per package, as in ci.yml.
+  context:
+    name: Autoupdate context
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup Scoop
+        uses: ./.github/actions/setup-scoop
+
+      # Rewrites version AND hash in bucket/context.json when the upstream date
+      # in status.tma moved: the manifest's autoupdate block declares a url but no
+      # hash-extraction rule, so Scoop downloads the archive and computes sha256.
+      - name: Check for a New Version
+        id: checkver
+        uses: ./.github/actions/scoop-checkver
+        with:
+          app: context
+          update: 'true'
+
+      # Committing BEFORE the test is deliberate: the test registers this
+      # workspace as a Scoop bucket, which git-clones it, and a clone only sees
+      # committed history. Testing with the update left uncommitted would install
+      # the OLD manifest and green-light the push regardless. The commit is local
+      # until the test passes.
+      - name: Commit Updated Manifest Locally
+        if: steps.checkver.outputs.changed == 'true'
+        shell: powershell
+        run: |
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add bucket/context.json
+          git commit -m "context: update to version ${{ steps.checkver.outputs.version }}"
+
+      - name: Install and Verify context
+        if: steps.checkver.outputs.changed == 'true'
+        uses: ./.github/actions/test-context
+
+      - name: Push Autoupdate
+        if: steps.checkver.outputs.changed == 'true'
+        shell: powershell
+        run: |
+          git push origin HEAD:${{ github.ref_name }}

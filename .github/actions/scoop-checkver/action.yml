@@ -1,0 +1,106 @@
+name: Scoop checkver
+description: Run Scoop's checkver on one manifest, optionally applying the autoupdate, and report what changed.
+
+inputs:
+  app:
+    description: App name, i.e. the manifest file name without .json.
+    required: true
+  bucket-dir:
+    description: Directory holding the manifests.
+    default: ${{ github.workspace }}/bucket
+  update:
+    description: 'Set to "true" to apply the autoupdate (rewrites version and hash in the manifest).'
+    default: 'false'
+
+outputs:
+  changed:
+    description: '"true" if checkver rewrote the manifest in the working tree.'
+    value: ${{ steps.checkver.outputs.changed }}
+  version:
+    description: Version in the manifest after checkver ran.
+    value: ${{ steps.checkver.outputs.version }}
+  previous-version:
+    description: Version in the manifest before checkver ran.
+    value: ${{ steps.checkver.outputs.previous-version }}
+  hash-updated:
+    description: '"true" if any hash in the manifest changed.'
+    value: ${{ steps.checkver.outputs.hash-updated }}
+
+runs:
+  using: composite
+  steps:
+    - name: Run checkver
+      id: checkver
+      shell: powershell
+      run: |
+        $ErrorActionPreference = 'Stop'
+
+        $app = '${{ inputs.app }}'
+        $dir = (Resolve-Path '${{ inputs.bucket-dir }}').Path
+        $manifestPath = Join-Path $dir "$app.json"
+        if (-not (Test-Path $manifestPath)) { throw "No manifest '$app.json' in $dir" }
+
+        # Version plus every hash in the manifest (global or per-architecture), so
+        # the comparison below stays correct for manifests of any shape.
+        function Get-ManifestSummary([String] $Path) {
+            $m = Get-Content $Path -Raw | ConvertFrom-Json
+            $hashes = @()
+            if ($m.hash) { $hashes += "hash=$($m.hash)" }
+            if ($m.architecture) {
+                $m.architecture.PSObject.Properties | ForEach-Object {
+                    if ($_.Value.hash) { $hashes += "$($_.Name)=$($_.Value.hash)" }
+                }
+            }
+            return [PSCustomObject]@{
+                Version = $m.version
+                Hashes  = (($hashes | Sort-Object) -join ' ')
+            }
+        }
+
+        $before = Get-ManifestSummary $manifestPath
+
+        $scoopRoot = if ($env:SCOOP) { $env:SCOOP } else { "$env:USERPROFILE\scoop" }
+        $checkver = Join-Path $scoopRoot 'apps\scoop\current\bin\checkver.ps1'
+
+        # -Dir is MANDATORY whenever -App is a bare app name rather than a path to
+        # a manifest file; checkver.ps1 throws "'-Dir' parameter required if '-App'
+        # is not a filepath!" otherwise.
+        # Splat with a HASHTABLE, not an array: array splatting feeds the tokens
+        # positionally, so '-App'/'-Dir' would become literal values instead of
+        # parameter names ("-Dir : context is not a directory!").
+        $checkverArgs = @{ App = $app; Dir = $dir }
+        if ('${{ inputs.update }}' -eq 'true') { $checkverArgs.Update = $true }
+        $updateFlag = if ('${{ inputs.update }}' -eq 'true') { ' -Update' } else { '' }
+        Write-Host "checkver.ps1 -App $app -Dir $dir$updateFlag"
+        & $checkver @checkverArgs
+
+        $after = Get-ManifestSummary $manifestPath
+
+        # The working tree is the source of truth for "did anything change": it
+        # covers rewrites checkver makes that are neither version nor hash.
+        $status = git status --porcelain -- $manifestPath
+        $changed = [bool]$status
+        $hashUpdated = $after.Hashes -ne $before.Hashes
+
+        Write-Host "version: $($before.Version) -> $($after.Version)"
+        if ($hashUpdated) {
+            Write-Host "hash(es): updated"
+            Write-Host "  before: $($before.Hashes)"
+            Write-Host "  after:  $($after.Hashes)"
+        } else {
+            Write-Host "hash(es): unchanged"
+        }
+
+        if ($changed) {
+            git --no-pager diff -- $manifestPath
+            if ($after.Version -ne $before.Version -and -not $hashUpdated) {
+                # Not an error: the upstream archive can be byte-identical across
+                # version bumps. The install test verifies the hash for real.
+                Write-Host "::warning::$app moved to $($after.Version) but no hash changed - upstream archive appears byte-identical."
+            }
+        }
+
+        echo "changed=$($changed.ToString().ToLower())" >> $env:GITHUB_OUTPUT
+        echo "version=$($after.Version)" >> $env:GITHUB_OUTPUT
+        echo "previous-version=$($before.Version)" >> $env:GITHUB_OUTPUT
+        echo "hash-updated=$($hashUpdated.ToString().ToLower())" >> $env:GITHUB_OUTPUT
