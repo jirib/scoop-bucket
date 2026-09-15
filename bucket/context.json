@@ -25,9 +25,6 @@
         ["tex\\texmf-win64\\bin\\context.exe", "context"]
     ],
     "env_add_path": "tex\\texmf-win64\\bin",
-    "persist": [
-        "tex"
-    ],
     "post_install": [
         "Push-Location $dir",
         "$server = 'lmtx.pragma-ade.com,lmtx.pragma-ade.nl,lmtx.contextgarden.net'",
