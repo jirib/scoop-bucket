@@ -1,0 +1,54 @@
+name: Non-ASCII install path
+
+on:
+  schedule:
+    # Detect upstream regressions (rolling release). Weekly, like ci.yml.
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
+
+jobs:
+  engine-nonascii:
+    name: Engine finds itself on a non-ASCII path
+    runs-on: windows-latest
+    steps:
+      # This is a canary for the upstream LuaMetaTeX bug where
+      # GetModuleFileNameA mangles any non-ASCII path component, so mtxrun.exe
+      # cannot find mtxrun.lua beside itself and aborts with
+      # "startup error : no format file given, quitting".
+      #
+      # It tests the *released* bootstrap archive directly (no Scoop), so it
+      # fails fast and needs no git/bucket setup. It stays red until upstream
+      # ships the fix; that red run is the point.
+      - name: Reproduce non-ASCII install path
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          # A non-ASCII directory name is enough to trigger the bug; the
+          # username is irrelevant. (Confirmed: fails under 'C:\tëst' with an
+          # otherwise ASCII path.)
+          $dir = 'C:\ctx-tëst\bin'
+          New-Item -ItemType Directory -Force $dir | Out-Null
+
+          $zip = Join-Path $env:RUNNER_TEMP 'context-win64.zip'
+          Invoke-WebRequest -Uri 'https://lmtx.pragma-ade.com/install-lmtx/context-win64.zip' -OutFile $zip
+
+          $x = Join-Path $env:RUNNER_TEMP 'ctx'
+          if (Test-Path $x) { Remove-Item $x -Recurse -Force }
+          Expand-Archive -LiteralPath $zip -DestinationPath $x
+
+          Copy-Item "$x\bin\mtxrun.exe" "$dir\mtxrun.exe"
+          Copy-Item "$x\bin\mtxrun.lua" "$dir\mtxrun.lua"
+
+          # Run with NO arguments: '--version' prints the engine banner even
+          # when mtxrun.lua failed to load, which would mask the bug.
+          $out = & "$dir\mtxrun.exe" 2>&1 | Out-String
+          Write-Host $out
+
+          if ($out -match 'no format file given') {
+              throw "BUG: mtxrun.exe cannot locate itself on a non-ASCII path:`n$out"
+          }
+          if ($out -notmatch 'ConTeXt TDS Runner Tool') {
+              throw "mtxrun.lua did not load (unexpected output):`n$out"
+          }
+          Write-Host 'OK: mtxrun.lua loaded from a non-ASCII path.'
