@@ -1,5 +1,5 @@
 {
-    "version": "2026.09.10",
+    "version": "2026.09.21",
     "description": "ConTeXt LMTX typesetting system based on LuaMetaTeX",
     "homepage": "https://www.contextgarden.net/",
     "license": "GPL-2.0-only",
@@ -11,7 +11,7 @@
     "architecture": {
         "64bit": {
             "url": "https://lmtx.pragma-ade.com/install-lmtx/context-win64.zip",
-            "hash": "sha256:9248c47a959360a9985292780e967c1192b1a5e25918c867fa9d10199fe280fd"
+            "hash": "08ac349d9cc7e7adee529c8b4c41e1440ca2849d9bec945f0e530e48c97b5a91"
         }
     },
     "pre_install": [
@@ -21,8 +21,14 @@
         "if (-not (Test-Path (Join-Path $bin_dir 'context.exe'))) { New-Item (Join-Path $bin_dir 'context.exe') -ItemType File -Force | Out-Null }"
     ],
     "bin": [
-        ["tex\\texmf-win64\\bin\\mtxrun.exe", "mtxrun"],
-        ["tex\\texmf-win64\\bin\\context.exe", "context"]
+        [
+            "tex\\texmf-win64\\bin\\mtxrun.exe",
+            "mtxrun"
+        ],
+        [
+            "tex\\texmf-win64\\bin\\context.exe",
+            "context"
+        ]
     ],
     "env_add_path": "tex\\texmf-win64\\bin",
     "post_install": [
