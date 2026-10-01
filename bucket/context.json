@@ -1,5 +1,5 @@
 {
-    "version": "2026.09.22",
+    "version": "2026.10.01",
     "description": "ConTeXt LMTX typesetting system based on LuaMetaTeX",
     "homepage": "https://www.contextgarden.net/",
     "license": "GPL-2.0-only",
@@ -11,7 +11,7 @@
     "architecture": {
         "64bit": {
             "url": "https://lmtx.pragma-ade.com/install-lmtx/context-win64.zip",
-            "hash": "b07f7da207104016060354eb790d8068cc3fbb05a03e0677e8fb1869c540579b"
+            "hash": "acb88b1ff8a35b5b75fc96998f6601fe9d9b9e7b9f587f1593dd706e85741f56"
         }
     },
     "pre_install": [
